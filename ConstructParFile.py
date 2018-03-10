@@ -120,7 +120,10 @@ def getDarkPot( iPot, constrain='ellipticite' ):
         metaKey = iDark[i].dtype.names[1]
         iDark[i][metaKey] = iPot[i]
 
-    iLimit[constrain]['int'] = 1
+    if constrain == 'ellipticite':
+        
+        iLimit['e1']['int'] = 1
+        iLimit['e2']['int'] = 1
         
     return iDark, iLimit
         
