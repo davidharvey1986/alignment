@@ -62,7 +62,8 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     for iPot in potentials:
         nLens+=1
         
-        if iPot['ConstrainFlag'] >= 10:
+        if (iPot['ConstrainFlag'] >= 10) & \
+          (iPot['GalaxyFlag'] == 1):
             #First sort the baryons
             iBaryons = getBaryonPot( iPot )
     
@@ -70,7 +71,6 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
 
             iDM['identity']['str'] = iDM['identity']['str']+'_dm'
             inParFilePotsDM.append(iDM)
-            iDM_limit[constrain]['int'] = 1
             inParFileLims.append(iDM_limit)
 
             iBaryons['identity']['str'] = \
@@ -121,7 +121,6 @@ def getDarkPot( iPot, constrain='ellipticite' ):
         iDark[i][metaKey] = iPot[i]
 
     if constrain == 'ellipticite':
-        
         iLimit['e1']['int'] = 1
         iLimit['e2']['int'] = 1
         
