@@ -27,7 +27,16 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     1. All consaining potentials need to be first in the list
        then the fixed baryons after
     2. Need to keep the first six halos as they are the big ones
-    
+
+
+    UPDATES:
+    1. New idea is the fix the stellar mass to the SED mass, then for each galaxy
+       in both the par file and the pot file, fix mass to the SHMR from
+       Velander et al 2013. This means there will be no unphysical MLRatios.
+     
+    Issues: If i take the new total mass, which in a PIEMD is a function of 
+            vdisp and cut radius, shold i keep the cut radius the same and just
+            change the velocity dispersion?
     '''
 
     lenstoolDir = '/Users/DavidHarvey/Documents/Work/alignment/'+\
@@ -77,6 +86,8 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
               iBaryons['identity']['str']+'_baryons'
             inParFilePotsBaryons.append(iBaryons)
 
+            
+
             nLensOpt += 1
             #There are two lenses so add but only optimising 1
             nLens += 1
@@ -110,7 +121,9 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     
 def getDarkPot( iPot, constrain='ellipticite' ):
     '''
-    Calulcate the dark matter potential 
+    Calulcate the dark matter potential. Take the stellar mass and
+    then calculate the SHMR for the total mass. This will change the velocity dispersion
+    assuming the cut radius is the same (which is isnt, so do i need to free this up?!)
     '''
 
     iDark = lt.potentiels.piemd()
@@ -123,9 +136,29 @@ def getDarkPot( iPot, constrain='ellipticite' ):
     if constrain == 'ellipticite':
         iLimit['e1']['int'] = 1
         iLimit['e2']['int'] = 1
-        
+
+    DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'] )
+
+    #Convert the old vdisp using the new total mass from the SHMR
+    iDark = Mass2Vdisp( iPot, np.log10(DarkMass) )
+
     return iDark, iLimit
-        
+
+def Stellar2HaloMass( StellarMass ):
+    '''
+    Using the Velander et al 2013 stellar to halo mass relation 
+    convert the stellar mass halo to the total mass 
+    halo
+    '''
+    #Velander et al parameters for red galaxies
+    h0 = 0.7 #Small hubble parameter
+    M0 = 1.4e13/h0
+    beta = 1.36
+    Mfiducial = 2e11/h0    
+
+    M200 = M0*(StellarMass/Mfiducial)**beta
+
+    return M200
     
 def getBaryonPot( iPot ):
     '''
@@ -140,14 +173,33 @@ def getBaryonPot( iPot ):
     iBaryons['cut_radius']['float'] = iPot['semiMajor'] / \
       np.sqrt(1+iPot['ellipticite'])
 
-     #work out the FWHM in parsecs
-    r_cut_pc = iBaryons['cut_radius']['float']  / 206265. * \
+    iBaryons = Mass2Vdisp( iBaryons, iPot['MSTAR'] )
+
+    iBaryons['core_radius']['float'] = 0.
+
+    return iBaryons
+
+
+
+def Mass2Vdisp( iPot, mass ):
+    '''
+    Take the mass and readius and return a velocity 
+    dispersion for the halo
+
+    iPot is the potential structure and mass is the logarith of the nass
+    of the halo
+
+    '''
+
+    
+    #work out the FWHM in parsecs
+    r_cut_pc = iPot['cut_radius']['float']  / 206265. * \
       lens.ang_distance( iPot['z_lens'] ) *1e6
       
     G = 4.302e-3
     #Work out the velocity dispersion
-    v_disp = np.sqrt(G*10**iPot['MSTAR'] / ( r_cut_pc  * np.pi ))
-    iBaryons['v_disp']['float'] = v_disp
-    iBaryons['core_radius']['float'] = 0.
+    v_disp = np.sqrt(G*10**mass / ( r_cut_pc  * np.pi ))
+    iPot['v_disp']['float'] = v_disp
 
-    return iBaryons
+    return iPot
+    
