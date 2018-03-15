@@ -6,6 +6,7 @@ import lensing as lens
 from CutGalaxiesWithSim import rec2pot as rec2pot
 import ipdb as pdb
 import os as os
+from copy import deepcopy as cp
 
 def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     '''
@@ -138,9 +139,10 @@ def getDarkPot( iPot, constrain='ellipticite' ):
         iLimit['e2']['int'] = 1
 
     DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'] )
-
+    oldVdisp = cp(iDark['v_disp']['float'])
+    
     #Convert the old vdisp using the new total mass from the SHMR
-    iDark = Mass2Vdisp( iPot, np.log10(DarkMass) )
+    iDark['v_disp']['float'] = Mass2Vdisp( iPot, np.log10(DarkMass) )
 
     return iDark, iLimit
 
@@ -172,11 +174,11 @@ def getBaryonPot( iPot ):
         
     iBaryons['cut_radius']['float'] = iPot['semiMajor'] / \
       np.sqrt(1+iPot['ellipticite'])
-
-    iBaryons = Mass2Vdisp( iBaryons, iPot['MSTAR'] )
+    
+    iBaryons['v_disp']['float'] = Mass2Vdisp( iPot, iPot['MSTAR'] )
 
     iBaryons['core_radius']['float'] = 0.
-
+    
     return iBaryons
 
 
@@ -190,16 +192,15 @@ def Mass2Vdisp( iPot, mass ):
     of the halo
 
     '''
-
+    
     
     #work out the FWHM in parsecs
-    r_cut_pc = iPot['cut_radius']['float']  / 206265. * \
+    r_cut_pc = iPot['cut_radius']  / 206265. * \
       lens.ang_distance( iPot['z_lens'] ) *1e6
       
     G = 4.302e-3
     #Work out the velocity dispersion
     v_disp = np.sqrt(G*10**mass / ( r_cut_pc  * np.pi ))
-    iPot['v_disp']['float'] = v_disp
-
-    return iPot
+    
+    return v_disp
     

@@ -53,7 +53,7 @@ def TestSelectedLenses( cluster, potentials, constrain, \
                                    pklName=pklName, \
                                    rerun=retest )
 
-    plotTest(potentials, ImageSensitivity)
+    #plotTest(potentials, ImageSensitivity)
 
     return ImageSensitivity
 
