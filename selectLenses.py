@@ -43,7 +43,7 @@ def main( cluster, constrain, nConstrain=30, retest=False,
     print 'THERE ARE A TOTAL OF '+str(nGalaxies)+\
       ' POTENTIAL GALAXIES TO CONSTRAIN'
 
-    FirstCutPots = CutLenses( MLRatioCat )
+    FirstCutPots = CutLenses( MLRatioCat, ellCut = 0., MLCut = 0. )
       
     nFirstCut = len(FirstCutPots[ FirstCutPots['ConstrainFlag'] > 0])
     print 'AFTER INITAL CUTS WE HAVE '+str(nFirstCut)+\

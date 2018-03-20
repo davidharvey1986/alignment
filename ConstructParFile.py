@@ -130,7 +130,7 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     grille = lt.grille( nLens, nLensOpt)
     source = lt.source()
     source['source']['int'] = 0
-    image['arcletstat']['int'] = 0
+    image['arcletstat']['option'] = 0
     lt.write_par( NewLesntoolDir+'/'+cluster+'_'+constrain+'.par', \
                       potentiel=totalPots, runmode=runmode,
                       potfile=potfile, limit=inParFileLims, image=image,
@@ -156,6 +156,8 @@ def getDarkPot( iPot, constrain='ellipticite' ):
         iLimit['e2']['int'] = 1
 
     DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'], iPot['z_lens'] )
+
+    
     oldVdisp = cp(iDark['v_disp']['float'])
     
     #Convert the old vdisp using the new total mass from the SHMR
@@ -163,7 +165,7 @@ def getDarkPot( iPot, constrain='ellipticite' ):
 
     return iDark, iLimit
 
-def Stellar2HaloMassVelander( StellarMass ):
+def Stellar2HaloMass( StellarMass, z ):
     '''
     Using the Velander et al 2013 stellar to halo mass relation 
     convert the stellar mass halo to the total mass 
@@ -180,7 +182,7 @@ def Stellar2HaloMassVelander( StellarMass ):
 
     return M200
 
-def Stellar2HaloMass( StellarMass, z):
+def Stellar2HaloMassLater( StellarMass, z):
     '''
     Using the Moster et al stellar to halo mass relation 
     convert the stellar mass halo to the total mass 
@@ -206,13 +208,8 @@ def Stellar2HaloMass( StellarMass, z):
     beta = B10*(1+z)**(B11)
     gamma = G10*(1+z)**(G11)
 
-    
- 
-
     loMassIndex = 1./(1.-gamma)
     hiMassIndex = 1./(1.+beta)
-
-
                  
     M200  = (StellarMass*M1**(-gamma)/(2.*N))**loMassIndex + \
       (StellarMass*M1**(beta)/(2.*N))**hiMassIndex 
@@ -279,15 +276,12 @@ def FixStellarMass( iPot, potfile ):
     '''
 
     TotalMass = Stellar2HaloMass( 10**iPot['MSTAR'], iPot['z_lens'] )
-    G = 4.302e-3
 
-    r_cut_pc = iPot['cut_radius']  / 206265. * \
-      lens.ang_distance( iPot['z_lens'] ) *1e6
-      
-    currentMass = np.pi / G * iPot['v_disp']**2 * r_cut_pc
+    currentMass =  PotMass( iPot )
 
     newMag = getNewMag( TotalMass, potfile )
-    print currentMass/1e10 , TotalMass/1e10, iPot['MSTAR'], iPot['mag'], newMag
+    
+    
     if iPot['MSTAR'] != -1:
         iPot['mag'] = newMag
 
@@ -301,25 +295,29 @@ def getNewMag( mass, potfile ):
     '''
     G = 4.302e-3
     
-    potfileMass = np.pi / G * potfile['sigma']['hi']**2 * potfile['cutkpc']['hi']*1e3
+    potfileMass = \
+      np.pi / G * potfile['sigma']['lo']**2 * potfile['cutkpc']['lo']*1e3
+   
+    deltaLum = (mass / potfileMass)
 
-    combinedSlope = 2./potfile['slope']['hi'] + 1./2.
-    
-    deltaLum = (mass / potfileMass)**(1./combinedSlope)
+    newMag = potfile['mag0']['float']-2.5*np.log10(deltaLum)
 
-    newMag = potfile['mag0']['float']-2.5*np.log(deltaLum)
-
-    print newMag
     return newMag
     
 
 
 
+def PotMass( iPot ):
+    '''
+    Get the current mass of hte halo
+    '''
+    G = 4.302e-3
+
+    r_cut_pc = iPot['cut_radius']  / 206265. * \
+      lens.ang_distance( iPot['z_lens'] ) *1e6
       
+    currentMass = np.pi / G * iPot['v_disp']**2 * r_cut_pc
     
-
-    
-
-    
+    return currentMass
     
     
