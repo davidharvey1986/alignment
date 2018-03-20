@@ -51,6 +51,15 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
                        par_dir = lenstoolDir,\
                        return_all=True,)
 
+
+    GalaxyPotfile =  [ i for i in potfile if 'member' in str(i['filein']['filename']) ]
+
+    if len(GalaxyPotfile) > 1:
+        raise ValueError('Expect exactly one potfile for the cluster member, found %i',\
+                             len(GalaxyPotfile))
+    else:
+        GalaxyPotfile = GalaxyPotfile[0]
+   
     MembersHeader = open(lenstoolDir+'/'+cluster+'_members.cat').readline()
     
     dtypes = [('ID', '|S20'), ('RA', float), ('DEC', float), \
@@ -75,8 +84,11 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
         if (iPot['ConstrainFlag'] >= 10) & \
           (iPot['GalaxyFlag'] == 1):
             #First sort the baryons
+            
             iBaryons = getBaryonPot( iPot )
-    
+            #Setting the baryonic mass to that of the SED
+            #the dark matter mass is fixed at the SHMR
+            #see function getDarkPot for more
             iDM, iDM_limit = getDarkPot( iPot )
 
             iDM['identity']['str'] = iDM['identity']['str']+'_dm'
@@ -93,7 +105,12 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
             #There are two lenses so add but only optimising 1
             nLens += 1
         elif iPot['GalaxyFlag'] == 1:
-            
+
+            #For each potfile galaxy, fix the stellar mass
+            #to the SED mass, scale to the total mass
+            #then set the cut radius and velocity dispersion
+            #based on these from the potfile results
+            iPot = FixStellarMass( iPot, GalaxyPotfile )
         
             TupleWrite = (iPot['identity'], iPot['ra'], iPot['dec'], \
                                    iPot['semiMajor'], iPot['semiMinor'],
@@ -138,7 +155,7 @@ def getDarkPot( iPot, constrain='ellipticite' ):
         iLimit['e1']['int'] = 1
         iLimit['e2']['int'] = 1
 
-    DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'] )
+    DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'], iPot['z_lens'] )
     oldVdisp = cp(iDark['v_disp']['float'])
     
     #Convert the old vdisp using the new total mass from the SHMR
@@ -146,7 +163,7 @@ def getDarkPot( iPot, constrain='ellipticite' ):
 
     return iDark, iLimit
 
-def Stellar2HaloMass( StellarMass ):
+def Stellar2HaloMassVelander( StellarMass ):
     '''
     Using the Velander et al 2013 stellar to halo mass relation 
     convert the stellar mass halo to the total mass 
@@ -155,10 +172,50 @@ def Stellar2HaloMass( StellarMass ):
     #Velander et al parameters for red galaxies
     h0 = 0.7 #Small hubble parameter
     M0 = 1.4e13/h0
+        
     beta = 1.36
-    Mfiducial = 2e11/h0    
+    Mfiducial = 2e11/h0**2   
 
     M200 = M0*(StellarMass/Mfiducial)**beta
+
+    return M200
+
+def Stellar2HaloMass( StellarMass, z):
+    '''
+    Using the Moster et al stellar to halo mass relation 
+    convert the stellar mass halo to the total mass 
+    halo
+
+    https://arxiv.org/pdf/1205.5807.pdf
+    '''
+
+    M10 = 11.590
+    M11 = 1.195
+
+    N10 = 0.0351
+    N11 = -0.0247
+
+    B10 = 1.376
+    B11 = -0.826
+
+    G10 = 0.608
+    G11 = 0.329
+    
+    N = N10 + N11*z 
+    M1 = 10**(M10 + M11*z)
+    beta = B10*(1+z)**(B11)
+    gamma = G10*(1+z)**(G11)
+
+    
+ 
+
+    loMassIndex = 1./(1.-gamma)
+    hiMassIndex = 1./(1.+beta)
+
+
+                 
+    M200  = (StellarMass*M1**(-gamma)/(2.*N))**loMassIndex + \
+      (StellarMass*M1**(beta)/(2.*N))**hiMassIndex 
 
     return M200
     
@@ -203,4 +260,66 @@ def Mass2Vdisp( iPot, mass ):
     v_disp = np.sqrt(G*10**mass / ( r_cut_pc  * np.pi ))
     
     return v_disp
+
+
+def FixStellarMass( iPot, potfile ):
+    '''
+    If i fix the stellar mass to the SED mass, then
+    convert to a total mass. I then work out the 
+    velocity disprsion and then the magntidue that
+    corresponds to this. Then change the magnitude 
+
+    Assuming the Faber-jackson relation of L proprto vdisp**4
+
+    Pot is the potential structure with the variosu tags required
+    of the indiviual galaxy
+
+    Potfile is the constrained general terms from the fiduial
+    run, i.e. the L*
+    '''
+
+    TotalMass = Stellar2HaloMass( 10**iPot['MSTAR'], iPot['z_lens'] )
+    G = 4.302e-3
+
+    r_cut_pc = iPot['cut_radius']  / 206265. * \
+      lens.ang_distance( iPot['z_lens'] ) *1e6
+      
+    currentMass = np.pi / G * iPot['v_disp']**2 * r_cut_pc
+
+    newMag = getNewMag( TotalMass, potfile )
+    print currentMass/1e10 , TotalMass/1e10, iPot['MSTAR'], iPot['mag'], newMag
+    if iPot['MSTAR'] != -1:
+        iPot['mag'] = newMag
+
+    return iPot
+    
+def getNewMag( mass, potfile ):
+    '''
+    Using the Faber and Jackson relatiom ,convert the
+    sigma nack to magnotude
+
+    '''
+    G = 4.302e-3
+    
+    potfileMass = np.pi / G * potfile['sigma']['hi']**2 * potfile['cutkpc']['hi']*1e3
+
+    combinedSlope = 2./potfile['slope']['hi'] + 1./2.
+    
+    deltaLum = (mass / potfileMass)**(1./combinedSlope)
+
+    newMag = potfile['mag0']['float']-2.5*np.log(deltaLum)
+
+    print newMag
+    return newMag
+    
+
+
+
+      
+    
+
+    
+
+    
+    
     
