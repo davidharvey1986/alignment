@@ -114,7 +114,7 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
         
             TupleWrite = (iPot['identity'], iPot['ra'], iPot['dec'], \
                                    iPot['semiMajor'], iPot['semiMinor'],
-                              iPot['angle'], iPot['z_lens'], iPot['mag'])
+                              iPot['angle'], iPot['mag'], 0.0 )
                                    
             NewClusterMemberCat.write('%s %0.7f %0.7f %0.1f %0.1f %f %0.5f %0.1f\n' % TupleWrite)                                  
             
