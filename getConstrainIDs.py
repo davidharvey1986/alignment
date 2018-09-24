@@ -2,7 +2,7 @@
 import numpy as np
 import ipdb as pdb
 import astro_tools_extra as at
-
+import lensing as lens
 def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
                            nCutRadii=3, distCut=0.3):
     '''
@@ -36,9 +36,10 @@ def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
     ImageDEC = np.array([ SensitivityDict[i]['DEC'] for i in ImageID ])
     MeanSensitivity = \
       np.array([ np.mean(SensitivityDict[i]['Delta']) for i in ImageID ])
-      
+
+    kpc2arcsec = 206265./lens.ang_distance(potentials['z_lens'][0])/1e3
     CutRadiusImageSep = (potentials['ClosestImageDist'] - \
-            nCutRadii*potentials['cut_radius'] < 0)
+            nCutRadii*potentials['cut_radius_kpc']*kpc2arcsec < 0)
 
         
 
@@ -54,7 +55,7 @@ def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
                                           ImageRA, ImageDEC, \
                                           abs=True )
                                           
-        InRadius = ImageDist < iPot['cut_radius']*nCutRadii
+        InRadius = ImageDist < iPot['cut_radius_kpc']*nCutRadii*kpc2arcsec
         
         if len(MeanSensitivity[ InRadius ]) == 0:
             continue
@@ -66,7 +67,7 @@ def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
       len( potentials[ potentials['ConstrainFlag'] >= 10 ])
     
     if SecondCutConstrain > nConstrain:
-        raise ValueError('Need another cut in Image Sensitivity')
+        print('WARNING: Number to be constrained is large')
  
 
     return potentials

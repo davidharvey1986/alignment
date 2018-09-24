@@ -31,9 +31,10 @@ def CreateNewClusterModel( cluster, sourceList, constrain, \
          'clusters/'+cluster
 
       
-        
     runmode, pots = \
-        lt.read_par( fiducialModel, par_dir=lenstoolDir)
+        lt.read_par( fiducialModel, par_dir=lenstoolDir)   
+    champ = \
+        lt.read_par( fiducialModel, par_dir=lenstoolDir, return_champ=True)
     
     if potentials is None:
         potentials = cp(pots)
@@ -45,10 +46,10 @@ def CreateNewClusterModel( cluster, sourceList, constrain, \
                 newDM = offset.ellipticity( iPot, 
                         e_offset )
             if constrain == 'position':
-                newDM = offset.ellipticite( iPot, \
+                newDM = offset.position( iPot, \
                         p_offset )
             if constrain == 'angle_pos':
-                newDM = offset.ellipticite( iPot, 
+                newDM = offset.angle_pos( iPot, 
                         a_offset )
                                                 
 
@@ -69,17 +70,18 @@ def CreateNewClusterModel( cluster, sourceList, constrain, \
     runmode['source']['int'] = 1
     runmode['source']['filename'] = sourceList
     runmode['verbose']['int'] = 0
-    
+    runmode['mass']['int'] = 0.
     lt.write_par(lenstoolDir+'/iOffset.par', \
                       runmode=runmode,
                      potentiel=newPotentialList,
                      image=image,
-                     source=source)
+                     source=source, \
+                     champ=champ)
 
     lt.run( 'iOffset.par', outdir=lenstoolDir)
 
-    os.system('mv '+lenstoolDir+'/image.dat '+\
-                  lenstoolDir+'/'+imageList)
+    lt.source_to_wcs(filename=lenstoolDir+'/image.all',
+                  outfile=lenstoolDir+'/'+imageList)
 
     
     

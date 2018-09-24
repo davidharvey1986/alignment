@@ -8,7 +8,7 @@ import ipdb as pdb
 import os as os
 from copy import deepcopy as cp
 
-def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
+def ConstructParFile( cluster, potentialFits, constrain='ellipticite' ):
     '''
     Construct the parameter file for the new reconstruction
 
@@ -25,7 +25,7 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     3. Write out the file
 
     TO BE CAREFUL
-    1. All consaining potentials need to be first in the list
+    1. All constraining potentials need to be first in the list
        then the fixed baryons after
     2. Need to keep the first six halos as they are the big ones
 
@@ -34,6 +34,9 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     1. New idea is the fix the stellar mass to the SED mass, then for each galaxy
        in both the par file and the pot file, fix mass to the SHMR from
        Velander et al 2013. This means there will be no unphysical MLRatios.
+
+    2. THis really doesny work so will go back to the original idea of cutting in unphysical MLratios
+       keeping the potfiles as they are, and 
      
     Issues: If i take the new total mass, which in a PIEMD is a function of 
             vdisp and cut radius, shold i keep the cut radius the same and just
@@ -46,7 +49,9 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     os.system('mkdir '+lenstoolDir+'/'+constrain)
 
     NewLesntoolDir = lenstoolDir+'/'+constrain
-    runmode, potentiels, limits, image, potfile = \
+
+    
+    runmode, potentiels, limits, image, source, potfile, grille, champ = \
       lt.read_par( 'bestopt.par', \
                        par_dir = lenstoolDir,\
                        return_all=True,)
@@ -68,19 +73,21 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
     
     clusterMembers = np.array( [], dtype = dtypes)
 
-    
-    inParFilePotsDM = [ rec2pot(i)  for i in potentials[0:len(limits)]]
+    inParFilePotsDM =  potentiels[0:len(limits)]
     inParFilePotsBaryons = []
     inParFileLims = limits
 
-    NewClusterMemberCat = open(NewLesntoolDir+'/new_member.cat', 'wb')
+    NewClusterMemberCat = open(NewLesntoolDir+'/'+cluster+'_members.cat', 'wb')
     NewClusterMemberCat.write(MembersHeader)
 
     nLensOpt = len(limits)
     nLens = 0
-    for iPot in potentials:
+    galaxyPotentials = potentialFits[1].data
+    keys = galaxyPotentials.dtype.names
+
+    for iPot in galaxyPotentials:
         nLens+=1
-        
+
         if (iPot['ConstrainFlag'] >= 10) & \
           (iPot['GalaxyFlag'] == 1):
             #First sort the baryons
@@ -118,30 +125,37 @@ def ConstructParFile( cluster, potentials, constrain='ellipticite' ):
                                    
             NewClusterMemberCat.write('%s %0.7f %0.7f %0.1f %0.1f %f %0.5f %0.1f\n' % TupleWrite)                                  
             
-        
                                           
     runmode['inverse']['int'] = 3
         
         
     NewClusterMemberCat.close()
 
-    totalPots = inParFilePotsDM + inParFilePotsBaryons
-
-    grille = lt.grille( nLens, nLensOpt)
-    source = lt.source()
-    source['source']['int'] = 0
+    totalPots = inParFilePotsDM + inParFilePotsBaryons 
+    runmode['image']['int'] = 0
+    if source is None:
+        source = lt.source()
+        source['source']['int'] = 0
     image['arcletstat']['option'] = 0
+    image['image']['int'] = 1
+    grille['nlens']['int'] = nLens
+    grille['nlens_opt']['int'] = len(inParFileLims)
     lt.write_par( NewLesntoolDir+'/'+cluster+'_'+constrain+'.par', \
                       potentiel=totalPots, runmode=runmode,
                       potfile=potfile, limit=inParFileLims, image=image,
-                      source=source, grille=grille)
+                      source=source, grille=grille, champ=champ)
     
-    
+    #Get the various files i need
+    os.system('cp -fr  '+lenstoolDir+'/'+cluster+'_members.cat '+NewLesntoolDir)
+    os.system('cp -fr  '+lenstoolDir+'/'+image['multfile']['filename']+' '+NewLesntoolDir)
+    for i in potfile:
+        os.system("cp -fr "+lenstoolDir+"/"+i['filein']['filename']\
+                       +' '+NewLesntoolDir)
 def getDarkPot( iPot, constrain='ellipticite' ):
     '''
     Calulcate the dark matter potential. Take the stellar mass and
     then calculate the SHMR for the total mass. This will change the velocity dispersion
-    assuming the cut radius is the same (which is isnt, so do i need to free this up?!)
+    assuming the cut radius is the same (which is isnt, so do i need to fre this up?!)
     '''
 
     iDark = lt.potentiels.piemd()
@@ -152,16 +166,17 @@ def getDarkPot( iPot, constrain='ellipticite' ):
         iDark[i][metaKey] = iPot[i]
 
     if constrain == 'ellipticite':
-        iLimit['e1']['int'] = 1
-        iLimit['e2']['int'] = 1
+        iLimit['ellipticite']['int'] = 1
+        #iLimit['e2']['int'] = 1
 
-    DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'], iPot['z_lens'] )
+    #Dont do this anymore, the model blows up
+    #DarkMass = Stellar2HaloMass( 10**iPot['MSTAR'], iPot['z_lens'] )
 
     
-    oldVdisp = cp(iDark['v_disp']['float'])
+    #oldVdisp = cp(iDark['v_disp']['float'])
     
     #Convert the old vdisp using the new total mass from the SHMR
-    iDark['v_disp']['float'] = Mass2Vdisp( iPot, np.log10(DarkMass) )
+    #iDark['v_disp']['float'] = Mass2Vdisp( iPot, np.log10(DarkMass) )
 
     return iDark, iLimit
 
@@ -225,13 +240,14 @@ def getBaryonPot( iPot ):
     for i in iBaryons.keys():
         metaKey = iBaryons[i].dtype.names[1]
         iBaryons[i][metaKey] = iPot[i]
-        
-    iBaryons['cut_radius']['float'] = iPot['semiMajor'] / \
-      np.sqrt(1+iPot['ellipticite'])
+
+    arcSec2kpc = lens.ang_distance(iPot['z_lens'])/206265.
+    iBaryons['cut_radius_kpc']['float'] = iPot['semiMajor'] / \
+      np.sqrt(1+iPot['ellipticite'])*arcSec2kpc
     
     iBaryons['v_disp']['float'] = Mass2Vdisp( iPot, iPot['MSTAR'] )
 
-    iBaryons['core_radius']['float'] = 0.
+    iBaryons['core_radius_kpc']['float'] = 0.
     
     return iBaryons
 
@@ -249,8 +265,7 @@ def Mass2Vdisp( iPot, mass ):
     
     
     #work out the FWHM in parsecs
-    r_cut_pc = iPot['cut_radius']  / 206265. * \
-      lens.ang_distance( iPot['z_lens'] ) *1e6
+    r_cut_pc = iPot['cut_radius_kpc']  * 1e3
       
     G = 4.302e-3
     #Work out the velocity dispersion
@@ -313,8 +328,8 @@ def PotMass( iPot ):
     '''
     G = 4.302e-3
 
-    r_cut_pc = iPot['cut_radius']  / 206265. * \
-      lens.ang_distance( iPot['z_lens'] ) *1e6
+    r_cut_pc = iPot['cut_radius_kpc']  * 1e3 
+
       
     currentMass = np.pi / G * iPot['v_disp']**2 * r_cut_pc
     

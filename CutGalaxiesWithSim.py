@@ -8,10 +8,11 @@ import getImageSensitivity as GIS
 import getClosestLens as GCL
 import getConstrainIDs as getConstrainIDs
 
-def CutGalaxiesWithSim( cluster, potentials, constrain, \
+def CutGalaxiesWithSim( cluster, potentialFits, constrain, \
                             nCutRadii=5.,\
                             distCut=0.3, \
-                            nConstrain=30 ):
+                            nConstrain=30, \
+                            rerun=False):
     '''
     #This script will run the second pass of selection process
     Method:
@@ -53,14 +54,18 @@ def CutGalaxiesWithSim( cluster, potentials, constrain, \
                  as significant movement.     
        nCOnstrain : Max number i want to constrain
     '''
-
+    
+    
+    GalaxyPotentials = potentialFits[1].data
+    
     #1. Get the source positions
     sourceList = cluster+'_sources.dat'
     createSourceList( cluster, sourceList=sourceList )
     #2.Create the fiducial imageList
     FiducialImageList = cluster+'_fid.img'
-    createImageList( cluster, potentials, sourceList, \
-                         imageList=FiducialImageList )
+    createImageList( cluster, potentialFits, sourceList, \
+                         imageList=FiducialImageList,
+                         rerun=rerun)
 
     #3.Now determine how sensitive each image is to the model
     # by creating a new cluster model with rotated and shifted
@@ -71,14 +76,15 @@ def CutGalaxiesWithSim( cluster, potentials, constrain, \
                                             sourceList, \
                                             FiducialImageList, \
                                             constrain, \
-                                            nRuns=20)
+                                            nRuns=5, \
+                                            rerun=rerun)
     
     #Now append to the dictionart of images which lens is closest
     LensSensitivity = \
-      GCL.getClosestLens( imageSensitivity, potentials )
+      GCL.getClosestLens( imageSensitivity, GalaxyPotentials )
 
     PotentialsWithClosestImage = \
-      GCL.getClosestImage(  imageSensitivity, potentials )
+      GCL.getClosestImage(  imageSensitivity, GalaxyPotentials )
 
       
     ConstrainPotentials = \
@@ -114,39 +120,44 @@ def createSourceList( cluster, \
         
  
        
-    runMode, potentials = \
-      lt.read_best( lenstoolDir+'/best.par')
-    image = \
-      lt.read_par( 'bestopt.par', par_dir=lenstoolDir, return_image=True)
-      
+    #runMode, potentials = \
+    #  lt.read_best( lenstoolDir+'/best.par')
+    runMode, potentials, limits, image, source, potfile, grille, champ = \
+      lt.read_par( 'bestopt.par', par_dir=lenstoolDir, return_all=True)
+    
     runMode['source']['int'] = 0
-    runMode['image']['filename'] = image['multfile']['filename']
+    runMode['image']['filename'] = cluster+'_mult.img'
     runMode['image']['int'] = 1
     runMode['inverse']['int'] = 0
     runMode['restart']['int'] = 0
-    
-    source = lt.source()
-    source['source']['int'] = 0
 
-    image['image']['int'] = 0
+    if source is None:
+        source = lt.source()
+        source['source']['int'] = 0
+
    
     
     lt.write_par( lenstoolDir+'/CreateSources.par',
                      runmode=runMode,
-                     potentiel=potentials,
+                     potentiel=potentials[0:len(limits)],
                      image=image,
-                     source=source)
+                     source=source,\
+                      champ=champ,\
+                      potfile=potfile, \
+                      grille=grille)
 
     lt.run( 'CreateSources.par', outdir=lenstoolDir)
 
     os.system('mv '+lenstoolDir+'/source.dat '+\
                   lenstoolDir+'/'+sourceList)
-
+                  
     
     
     
 def createImageList( cluster, potentials, sourceList,
-                         lenstoolDir=None, imageList='image.dat'):
+                         lenstoolDir=None, \
+                         imageList='image.all.wcs',\
+                         rerun=False):
     '''
     Using the potentials, create a fiducial Image list
     that i can compare to 
@@ -163,17 +174,19 @@ def createImageList( cluster, potentials, sourceList,
          'clusters/'+cluster
 
 
-    if os.path.isfile( lenstoolDir+'/'+imageList):
+    if os.path.isfile( lenstoolDir+'/'+imageList) & (not rerun):
         return
     
     potentialList = []
-    for iPot in potentials:
+    galaxyPotentials = potentials[1].data
+    keys = potentials[1].data.dtype.names
+    for iPot in galaxyPotentials:
         #convert the recarray entry to a potential for lt scripts
-        newPot = rec2pot( iPot )
-        
-        if (iPot['ConstrainFlag'] == 1) & \
-          (iPot['GalaxyFlag'] == 1):
-        
+        newPot = rec2pot( iPot, keys )
+        #Divide all the galaxies
+        #if (iPot['ConstrainFlag'] == 1) & \
+        #  (iPot['GalaxyFlag'] == 1):
+        if iPot['GalaxyFlag'] == 1:
          
           baryons, darkMatter = offset.split_potential( newPot )
 
@@ -185,30 +198,44 @@ def createImageList( cluster, potentials, sourceList,
             potentialList.append( newPot )
 
 
+    if len(potentials) >2:
+        for iExt in xrange(len(potentials)-2):
+            keys = potentials[iExt+2].data.dtype.names
+            for iPot in potentials[iExt+2].data:
+                newPot = rec2pot( iPot, keys )
 
-    runmode, potentials = lt.read_par('bestopt.par', \
-                                          par_dir=lenstoolDir)
+                potentialList.append(newPot)
+
+
+            
+    runmode, potentials, limits, image, source, potfile, grille, champ = \
+      lt.read_par('bestopt.par', \
+                      par_dir=lenstoolDir, return_all=True)
     runmode['inverse']['int'] = 0
     runmode['source']['int'] = 1
     runmode['source']['filename'] = sourceList
     runmode['image']['int'] = 0
-
-    source = lt.source()
-    source['source']['int'] = 0
+    grille = lt.grille(len(potentialList),len(potentialList))
+    if source is None:
+        source = lt.source()
+        source['source']['int'] = 0
     image = lt.image()
     image['image']['int'] = 0
     
-
+    
     lt.write_par(lenstoolDir+'/splitPotential.par',
                       runmode=runmode,
                      potentiel=potentialList,
-                     image=image,
-                     source=source)
+                     image=image, grille=grille,
+                     source=source, champ=champ)
     lt.run( 'splitPotential.par', outdir=lenstoolDir)
 
     #2.
+    lt.source_to_wcs(filename=lenstoolDir+'/image.all',
+                  outfile=lenstoolDir+'/image.all.wcs')
+    
     cleanImageList( lenstoolDir+'/'+runmode['image']['filename'],\
-                        lenstoolDir+'/image.dat',
+                        lenstoolDir+'/image.all.wcs',
                         lenstoolDir+'/'+imageList)
 
 
@@ -259,7 +286,7 @@ def cleanImageList( fiducialList, newList, outputList):
 
 
 
-def rec2pot( recEntry):
+def rec2pot( recEntry, keys):
     '''
     Take a recarray entry and convert it into a potential
     that can be used in my lenstool scripts
@@ -268,7 +295,7 @@ def rec2pot( recEntry):
     
     #Because the input potentials is not
     #int he standard format i need to readjust
-    for iName in recEntry.dtype.names:
+    for iName in keys:
         if not iName in newPot.keys():
             continue
         metaKey = newPot[iName].dtype.names[-1]

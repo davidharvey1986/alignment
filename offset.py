@@ -150,11 +150,11 @@ def mass( potential, m_offset, centre=None ):
 
    
     
-    potential['cut_radius']['float']  *= 1+rand_m_offset
+    potential['cut_radius_kpc']['float']  *= 1+rand_m_offset
     #Conserve mass since m propto v_disp**2*r_cut
     potential['v_disp']['float'] *= np.sqrt(1./(1.+rand_m_offset))
 
-    if potential['cut_radius']['float'] < 0:
+    if potential['cut_radius_kpc']['float'] < 0:
         pdb.set_trace()
 
     return  potential
@@ -198,7 +198,7 @@ def all_offset( potential, \
     potential['y_centre']['float']  += rand_y_offset
     potential['ellipticite']['float']  += rand_e_offset
     potential['angle_pos']['float']  += rand_a_offset
-    potential['cut_radius']['float'] *= 1+m_offset
+    potential['cut_radius_kpc']['float'] *= 1+m_offset
     
     return potential
 
@@ -224,13 +224,13 @@ def split_potential( potential ):
     #originally it was 4, will try 10 now
     ML_ratio = 4.
     #Baryons 
-    baryons['cut_radius']['float'] /=  ML_ratio
+    baryons['cut_radius_kpc']['float'] /=  ML_ratio
     baryons['identity'] = cp.deepcopy(potential['identity'])
     baryons['identity']['str'] = potential['identity']['str']+'_baryons'
         
     #dark matter
     
-    dark_matter['core_radius']['float'] = baryons['cut_radius']['float']
+    dark_matter['core_radius_kpc']['float'] = baryons['cut_radius_kpc']['float']
 
     dark_matter['identity'] = cp.deepcopy(potential['identity'])
     dark_matter['identity']['str'] = potential['identity']['str']+'_dm'

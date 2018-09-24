@@ -4,15 +4,16 @@ import CompareImageLists as CIL
 import numpy as np
 import pickle as pkl
 import os as os
+import ipdb as pdb
 
 def getImageSensitivity( cluster, sourceList, FiducialImageList,
                              constrain, rerun=False, 
                              nRuns=20, potentials=None,
                              pklName=None,
                              p_offset=0.1, \
-                             e_offset=20., \
+                             e_offset=20, \
                              a_offset=20., \
-                             m_offset=0.1):
+                             m_offset=0.):
     '''
     Determine how sensitive each multiple image is to snall
     pertubations in the cluster model.
@@ -34,12 +35,12 @@ def getImageSensitivity( cluster, sourceList, FiducialImageList,
           '_imageSensitivity.pkl'
     else:
         pklName = lenstoolDir+'/'+pklName
-        
+    
     if (os.path.isfile( pklName)) & (not rerun):
         with open(pklName,'rb') as f:
             return pkl.load(f)
     
-
+    
          
     NewImageList = 'image_tmp.dat'
     #Create a new model
@@ -72,7 +73,6 @@ def getImageSensitivity( cluster, sourceList, FiducialImageList,
             TotalImageDifference[iImage['ID']]['DEC'] = iImage['DEC']
             TotalImageDifference[iImage['ID']]['Redshift'] = \
               iImage['Redshift']
-
 
         
     pkl.dump(TotalImageDifference, open(pklName,'wb'))

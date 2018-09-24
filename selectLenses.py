@@ -7,9 +7,10 @@ import ipdb as pdb
 import CutGalaxiesWithSim as CutGalaxies
 import ConstructParFile as CPF
 import TestSelectedLenses as TSL
+from VerifyParFile import *
 
 def main( cluster, constrain, nConstrain=30, retest=False,
-              distCut=0.3, nCutRadii=4):
+              distCut=0.3, nCutRadii=4, MLCut=10., ellCut=0.):
     '''
     Aim: To get the galaxy members we want to constrain, with a max
     number to constrain of nConstrain (default 30)
@@ -33,8 +34,10 @@ def main( cluster, constrain, nConstrain=30, retest=False,
     
     
     AllMemberMasses = HSM.HFFstellarMass( cluster )
-    
-    MLRatioCat = MassToLightRatio( AllMemberMasses )
+
+    AllMemberMasses[1].data = MassToLightRatio( AllMemberMasses[1].data )
+
+    MLRatioCat = AllMemberMasses[1].data
 
     #There seems to be a lot of galaxies to constrain so lets
     #now go to the second method
@@ -43,36 +46,46 @@ def main( cluster, constrain, nConstrain=30, retest=False,
     print 'THERE ARE A TOTAL OF '+str(nGalaxies)+\
       ' POTENTIAL GALAXIES TO CONSTRAIN'
 
-    FirstCutPots = CutLenses( MLRatioCat, ellCut = 0., MLCut = 0. )
+    AllMemberMasses[1].data = \
+      CutLenses( MLRatioCat, ellCut = ellCut, MLCut = MLCut )
       
-    nFirstCut = len(FirstCutPots[ FirstCutPots['ConstrainFlag'] > 0])
+    FirstCutPots=  AllMemberMasses[1].data
+    nFirstCut = len(FirstCutPots[ (FirstCutPots['ConstrainFlag'] > 0) & \
+                        (FirstCutPots['GalaxyFlag'] == 1)])
     print 'AFTER INITAL CUTS WE HAVE '+str(nFirstCut)+\
       ' GALAXIES TO CONSTRAIN'
 
     if nFirstCut > nConstrain:   
         #This will return the potentials array with extra flags
         #on the 
-        SecondCutPots = \
-          CutGalaxies.CutGalaxiesWithSim( cluster, FirstCutPots, constrain,\
+        AllMemberMasses[1].data = \
+          CutGalaxies.CutGalaxiesWithSim( cluster, AllMemberMasses, \
+                                              constrain,\
                                               nCutRadii=nCutRadii, \
-                                              distCut=distCut)
+                                              distCut=distCut,\
+                                              rerun=False)
+        SecondCutPots = AllMemberMasses[1].data
         
         nSecondCut = \
           len(SecondCutPots[ SecondCutPots['ConstrainFlag'] >= 10])
         print 'AFTER SECOND CUTS WE HAVE '+str(nSecondCut)+\
           ' GALAXIES TO CONSTRAIN'
     else:
-        SecondCutPots = FirstCutPots
-
-    #Having appended some constrain flags, construct the par file
+        
+        FirstCutPots['ConstrainFlag'][FirstCutPots['ConstrainFlag'] == 1] = 10.
+        AllMemberMasses[1].data = FirstCutPots
+        nSecondCut = nFirstCut
+    #Having appenSecondCutPotsded some constrain flags, construct the par file
     #This is where i will cut out the galaxies that cant be constrainted
     #i.e. ConstrainFlag < 10
-    TestImageSensitivity = \
-      TSL.TestSelectedLenses( cluster, SecondCutPots,  constrain,
-                                  nRuns=20, retest=retest)
-                            
-    CPF.ConstructParFile( cluster, SecondCutPots, constrain=constrain )
-
+    if nSecondCut > 0:
+        TestImageSensitivity = \
+        TSL.TestSelectedLenses( cluster, AllMemberMasses,  constrain,
+                                    nRuns=20, retest=retest)
+    else:
+        TestImageSensitivity ='No potentials constrained so the sensitivity is irrelant'
+    CPF.ConstructParFile( cluster, AllMemberMasses, constrain=constrain )
+    VerifyParFile( cluster, constrain=constrain)
     return TestImageSensitivity
 
 
@@ -107,8 +120,7 @@ def MassToLightRatio( memberCat ):
     MLRatio = np.zeros(len(memberCat['RA'])) - 1.
     
     G = 4.302e-3
-    rCutPc = memberCat['cut_radius']/206265.*\
-      lensing.ang_distance( memberCat['z_lens'][0] )*1e6
+    rCutPc = memberCat['cut_radius_kpc']*1e3
     HaloMass = np.pi / G * memberCat['v_disp']**2*\
       rCutPc
 
@@ -117,5 +129,5 @@ def MassToLightRatio( memberCat ):
 
     memberCat = append_rec(memberCat, 'MLRatio', MLRatio, \
                                usemask=False, asrecarray=True)
-    
+
     return memberCat

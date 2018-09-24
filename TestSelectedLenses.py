@@ -20,8 +20,11 @@ def TestSelectedLenses( cluster, potentials, constrain, \
         FiducialImageList = cluster+'_fid.img'
 
     TestPots = []
-    for iRecPot in potentials:
-        iPot = rec2pot( iRecPot )
+    haloPotentials = potentials[1].data
+    keys = potentials[1].data.dtype.names
+
+    for iRecPot in haloPotentials:
+        iPot = rec2pot( iRecPot, keys )
         if (iRecPot['ConstrainFlag'] >= 10)  & \
           (iRecPot['GalaxyFlag'] == 1):
             baryons, darkMatter = \
@@ -29,21 +32,17 @@ def TestSelectedLenses( cluster, potentials, constrain, \
               
             TestPots.append( darkMatter )
             TestPots.append( baryons )
-            
-        elif (iRecPot['ConstrainFlag'] == 1) & \
-          (iRecPot['GalaxyFlag'] == 1):
-            baryons, darkMatter = \
-              split_potential( iPot )
-
-            #make the darkmatter have a identity
-            #not the same
-            darkMatter['identity']['str'] = \
-              str(darkMatter['identity']['str'])[0:-3]
-
-            TestPots.append( darkMatter )
-            TestPots.append( baryons )
+        
         else:
             TestPots.append( iPot )
+
+    if len(potentials) > 2:
+        for iExt in xrange(len(potentials)-2):
+            keys = potentials[iExt+2].data.dtype.names
+            for iRecPot in potentials[iExt+2].data:
+                iPot = rec2pot( iRecPot, keys )
+                TestPots.append(iPot)
+
 
     pklName= cluster+'_'+constrain+'_testimage.pkl'
     ImageSensitivity = \

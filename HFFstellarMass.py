@@ -8,6 +8,7 @@ import os as os
 import ipdb as pdb
 import idlsave as save
 import getSherpaShapes as GSS
+from CheckMultipleImageFile import *
 
 def HFFstellarMass( cluster ):
     '''
@@ -55,6 +56,10 @@ def HFFstellarMass( cluster ):
     if not os.path.isfile( membersCatFits):
         clusterMembersToFits( membersCatSherpa, membersCatFits )
 
+    #Check the multiple image file for free redshifts
+    #that need to be updated to have their bestopt.par limits
+    CheckMultipleImageFile( cluster )
+    
     #2. Convert the par file to fits
     if not os.path.isfile(bestParFits):
         lt.best_to_fits( bestPar, outfile=bestParFits)
@@ -74,7 +79,7 @@ def HFFstellarMass( cluster ):
     if not os.path.isfile(TOTcatFits):
         DMandSMCat = matchCat( massRADECFits, DMcatFits, TOTcatFits)
 
-    return fits.open(TOTcatFits)[1].data
+    return fits.open(TOTcatFits)
 
 def DeepSpaceAddMass( radecFile, massCatFile, outCat):
 
@@ -88,7 +93,7 @@ def DeepSpaceAddMass( radecFile, massCatFile, outCat):
     radec = save.read( radecFile )
 
     mass = np.array([])
-
+    
 
     for iGal in radec['id']:
         index = iGal == massCat['id']
@@ -135,6 +140,8 @@ def matchCat( catA, catB, outCat):
     
     catBData[1].data = append_rec(catBData[1].data, 'ID', GalID, \
                           usemask=False, asrecarray=True)
+
+    
 
     catBData.writeto(catB, clobber=True)
     
@@ -194,8 +201,19 @@ def matchCat( catA, catB, outCat):
         columns.append(iColumn)
         
     TotalCat = fits.BinTableHDU.from_columns(columns)
+    TotalCat = [fits.PrimaryHDU(), TotalCat]
 
-    TotalCat.writeto( outCat,  clobber=True )
+    #append extra potentials in teh best.fits for
+    #example external shear
+    catBExtensions = fits.open( catB)
+    if len(catBExtensions) >2:
+        
+        for iExt in xrange(len(catBExtensions)-2):
+            TotalCat.append(catBExtensions[iExt+2])
+
+    thdulist = fits.HDUList(TotalCat)
+
+    thdulist.writeto(  outCat,  clobber=True )
 
     
 def clusterMembersToFits( membersCat, outFits ):

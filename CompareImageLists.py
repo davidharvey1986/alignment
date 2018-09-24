@@ -2,12 +2,15 @@
 from lensing import lenstool as lt
 import numpy as np
 import astro_tools_extra as at
+import ipdb as pdb
 
-
-def CompareImageLists( catAFileName, catBFileName ):
+def CompareImageLists( catAFileName, catBFileName, noFind=1.0 ):
     '''
     Compare two image lists, and get how much the each image
     has moved from one image to the next
+
+    noFind = when the image disappears and cant be compared
+    the defaul value
     
     '''
     dtypes = [('ID', '|S20'), ('RA', float), ('DEC', float), \
@@ -26,6 +29,17 @@ def CompareImageLists( catAFileName, catBFileName ):
                                      ('Redshift', float)])
     for iImage in catA:
         IDindex =  catB['ID'] == iImage['ID']
+        
+        if np.all(IDindex == False):
+      
+            #This happens if the new model doesnt produce the image
+            newEntry = np.array((iImage['ID'], np.min(noFind), \
+                                iImage['RA'], iImage['DEC'], \
+                                iImage['Redshift']), \
+                             dtype=outCat.dtype)
+            outCat = np.append( outCat, newEntry)
+            continue
+        
         NewCatRA = catB['RA'][ IDindex ]
         NewCatDEC = catB['DEC'][ IDindex ]
 
