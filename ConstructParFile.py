@@ -7,7 +7,7 @@ from CutGalaxiesWithSim import rec2pot as rec2pot
 import ipdb as pdb
 import os as os
 from copy import deepcopy as cp
-
+import astro_tools as at
 def ConstructParFile( cluster, potentialFits, constrain='ellipticite' ):
     '''
     Construct the parameter file for the new reconstruction
@@ -50,7 +50,8 @@ def ConstructParFile( cluster, potentialFits, constrain='ellipticite' ):
 
     NewLesntoolDir = lenstoolDir+'/'+constrain
 
-    
+    constrainedGalaxies = open(NewLesntoolDir+'/constrain_members.cat', 'wb')
+  
     runmode, potentiels, limits, image, source, potfile, grille, champ = \
       lt.read_par( 'bestopt.par', \
                        par_dir = lenstoolDir,\
@@ -78,20 +79,29 @@ def ConstructParFile( cluster, potentialFits, constrain='ellipticite' ):
     inParFileLims = limits
 
     NewClusterMemberCat = open(NewLesntoolDir+'/'+cluster+'_members.cat', 'wb')
+    constrainedGalaxies = open(NewLesntoolDir+'/constrain_members.cat', 'wb')
+    MembersHeaderSplit = MembersHeader.split()
+
     NewClusterMemberCat.write(MembersHeader)
 
+    ConstrainHeader = MembersHeader.split()
+    ConstrainHeader[1] = '0'
+    ConstrainHeaderStr = ' '.join(ConstrainHeader)
+    constrainedGalaxies.write(ConstrainHeaderStr+' \n')
     nLensOpt = len(limits)
-    nLens = 0
-    galaxyPotentials = potentialFits[1].data
+    nLens = len(limits)
+    
+    galaxyPotentials = potentialFits[1].data 
     keys = galaxyPotentials.dtype.names
 
+
+    
     for iPot in galaxyPotentials:
-        nLens+=1
 
         if (iPot['ConstrainFlag'] >= 10) & \
           (iPot['GalaxyFlag'] == 1):
             #First sort the baryons
-            
+
             iBaryons = getBaryonPot( iPot )
             #Setting the baryonic mass to that of the SED
             #the dark matter mass is fixed at the SHMR
@@ -108,31 +118,44 @@ def ConstructParFile( cluster, potentialFits, constrain='ellipticite' ):
 
             
 
-            nLensOpt += 1
+            nLensOpt += 2
             #There are two lenses so add but only optimising 1
-            nLens += 1
+            nLens += 2
+            
+            TupleWrite = (iPot['identity'], iPot['ra'], iPot['dec'], \
+                                   iPot['semiMajor'], iPot['semiMinor'],
+                              iPot['angle'], iPot['mag'], 0.0 )
+            
+            constrainedGalaxies.write('%s %0.7f %0.7f %0.1f %0.1f %f %0.5f %0.1f\n' % TupleWrite)    
+            
         elif iPot['GalaxyFlag'] == 1:
-
+           
             #For each potfile galaxy, fix the stellar mass
             #to the SED mass, scale to the total mass
             #then set the cut radius and velocity dispersion
             #based on these from the potfile results
-            iPot = FixStellarMass( iPot, GalaxyPotfile )
-        
-            TupleWrite = (iPot['identity'], iPot['ra'], iPot['dec'], \
+            #iPot = FixStellarMass( iPot, GalaxyPotfile )
+
+            decRads =  np.float(runmode['reference']['dec'])/180.*np.pi
+            deltaRA =  (iPot['ra'] - np.float(runmode['reference']['ra']))*-1*np.cos(decRads)*3600.
+            deltaDEC = (iPot['dec'] - np.float(runmode['reference']['dec']))*3600.
+                    
+            TupleWrite = (iPot['identity'], deltaRA, deltaDEC, \
                                    iPot['semiMajor'], iPot['semiMinor'],
-                              iPot['angle'], iPot['mag'], 0.0 )
-                                   
-            NewClusterMemberCat.write('%s %0.7f %0.7f %0.1f %0.1f %f %0.5f %0.1f\n' % TupleWrite)                                  
+                              iPot['angle'], iPot['mag'],  iPot['z'] )
             
-                                          
+            NewClusterMemberCat.write('%s\t%0.7f\t%0.7f\t%0.7f\t%0.7f\t%f\t%0.7f\t%0.5f\n' % TupleWrite)                                  
+            nLens +=1
+        
+
     runmode['inverse']['int'] = 3
         
         
     NewClusterMemberCat.close()
-
+    
     totalPots = inParFilePotsDM + inParFilePotsBaryons 
     runmode['image']['int'] = 0
+
     if source is None:
         source = lt.source()
         source['source']['int'] = 0
@@ -146,11 +169,14 @@ def ConstructParFile( cluster, potentialFits, constrain='ellipticite' ):
                       source=source, grille=grille, champ=champ)
     
     #Get the various files i need
-    os.system('cp -fr  '+lenstoolDir+'/'+cluster+'_members.cat '+NewLesntoolDir)
+    
     os.system('cp -fr  '+lenstoolDir+'/'+image['multfile']['filename']+' '+NewLesntoolDir)
+    
     for i in potfile:
-        os.system("cp -fr "+lenstoolDir+"/"+i['filein']['filename']\
-                       +' '+NewLesntoolDir)
+        if not 'member' in str(i['filein']['filename']):
+            
+            os.system("cp -fr "+lenstoolDir+"/"+i['filein']['filename']\
+                        +' '+NewLesntoolDir)
 def getDarkPot( iPot, constrain='ellipticite' ):
     '''
     Calulcate the dark matter potential. Take the stellar mass and

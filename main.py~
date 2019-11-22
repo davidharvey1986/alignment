@@ -12,8 +12,8 @@ def main( constrain='ellipticite', nConstrain=30):
     for iCluster in clusters:
         print iCluster
         lensSensitivity = \
-          sl.main( iCluster, constrain, nConstrain=30, retest=False, 
-                    distCut=0.1, ellCut=0.2, nCutRadii=3, MLCut=1.)
+          sl.main( iCluster, constrain, nConstrain=30, retest=False,
+                    distCut=0.1, ellCut=0.2, nCutRadii=3, MLCut=3.)
 
         keys = lensSensitivity.keys()
         MeanSensitivity = \
@@ -24,7 +24,7 @@ def main( constrain='ellipticite', nConstrain=30):
 
 
     plt.legend()
-    plt.show()
+
 
 
 if __name__ == '__main__':

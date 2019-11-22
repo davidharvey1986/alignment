@@ -36,7 +36,7 @@ def main( cluster, constrain, nConstrain=30, retest=False,
     AllMemberMasses = HSM.HFFstellarMass( cluster )
 
     AllMemberMasses[1].data = MassToLightRatio( AllMemberMasses[1].data )
-
+    
     MLRatioCat = AllMemberMasses[1].data
 
     #There seems to be a lot of galaxies to constrain so lets
@@ -75,6 +75,7 @@ def main( cluster, constrain, nConstrain=30, retest=False,
         FirstCutPots['ConstrainFlag'][FirstCutPots['ConstrainFlag'] == 1] = 10.
         AllMemberMasses[1].data = FirstCutPots
         nSecondCut = nFirstCut
+
     #Having appenSecondCutPotsded some constrain flags, construct the par file
     #This is where i will cut out the galaxies that cant be constrainted
     #i.e. ConstrainFlag < 10
@@ -86,6 +87,7 @@ def main( cluster, constrain, nConstrain=30, retest=False,
         TestImageSensitivity ='No potentials constrained so the sensitivity is irrelant'
     CPF.ConstructParFile( cluster, AllMemberMasses, constrain=constrain )
     VerifyParFile( cluster, constrain=constrain)
+    
     return TestImageSensitivity
 
 
@@ -126,7 +128,8 @@ def MassToLightRatio( memberCat ):
 
     
     MLRatio =  HaloMass/ 10**memberCat['MSTAR']
-
+    MLRatio[ memberCat['MSTAR'] == -1 ] = -1
+    
     memberCat = append_rec(memberCat, 'MLRatio', MLRatio, \
                                usemask=False, asrecarray=True)
 

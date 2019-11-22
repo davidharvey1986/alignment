@@ -72,6 +72,7 @@ def CutGalaxiesWithSim( cluster, potentialFits, constrain, \
     #  DM halos and creating a new image list
     #This returns a dictionary of the images with how sensitive they are:
     #I.e. the mean radial shift in the image
+
     imageSensitivity = GIS.getImageSensitivity( cluster, \
                                             sourceList, \
                                             FiducialImageList, \
@@ -174,7 +175,8 @@ def createImageList( cluster, potentials, sourceList,
          'clusters/'+cluster
 
 
-    if os.path.isfile( lenstoolDir+'/'+imageList) & (not rerun):
+    if os.path.isfile( lenstoolDir+'/'+imageList) & (not rerun) & \
+      os.path.isfile(lenstoolDir+'/splitPotential.par'):
         return
     
     potentialList = []
@@ -268,22 +270,15 @@ def cleanImageList( fiducialList, newList, outputList):
 
         Separation = at.ra_separation( NewCatRA, NewCatDEC, \
                                            iImage['RA'], iImage['DEC'], 
-                                           abs=True)
-        
+                                          abs=True)
+
+        if len(Separation) == 0:
+            raise ValueError("Could not find %s in %s" % (iImage ,newList))
         outCat.write('%s %0.7f %0.7f %0.1f %0.1f %0.1f %0.5f %0.1f \n' %  \
                          tuple(NewCat[IDindex][np.argmin(Separation)]))
 
 
     outCat.close()
-
-        
-
-        
-        
-        
-        
-    
-
 
 
 def rec2pot( recEntry, keys):

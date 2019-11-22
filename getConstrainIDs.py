@@ -3,6 +3,8 @@ import numpy as np
 import ipdb as pdb
 import astro_tools_extra as at
 import lensing as lens
+from copy import deepcopy as cp
+
 def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
                            nCutRadii=3, distCut=0.3):
     '''
@@ -30,24 +32,25 @@ def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
 
     '''
     
-                       
+    OldPotentials = cp( potentials )
     ImageID = SensitivityDict.keys()
     ImageRA = np.array([ SensitivityDict[i]['RA']  for i in ImageID ])
     ImageDEC = np.array([ SensitivityDict[i]['DEC'] for i in ImageID ])
     MeanSensitivity = \
       np.array([ np.mean(SensitivityDict[i]['Delta']) for i in ImageID ])
-
-    kpc2arcsec = 206265./lens.ang_distance(potentials['z_lens'][0])/1e3
+    
+    kpc2arcsec = 206265./lens.ang_distance(potentials['z_lens'][-1])/1e3
     CutRadiusImageSep = (potentials['ClosestImageDist'] - \
             nCutRadii*potentials['cut_radius_kpc']*kpc2arcsec < 0)
 
         
-
-    ImagesInRadius = potentials['ClosestImage'][CutRadiusImageSep]
     
+    ImagesInRadius = potentials['ClosestImage'][CutRadiusImageSep]
+
+    iPotSensitivity = np.array([])
 
     for iPot in potentials:
-
+        
         #for each image get the lenses that are within nRadii
         #of that lens
 
@@ -57,18 +60,29 @@ def ImageWithinRadius( SensitivityDict, potentials, nConstrain,
                                           
         InRadius = ImageDist < iPot['cut_radius_kpc']*nCutRadii*kpc2arcsec
         
+        
         if len(MeanSensitivity[ InRadius ]) == 0:
             continue
-
-        if np.max(MeanSensitivity[ InRadius ]) > distCut:
+        if np.max(MeanSensitivity[ InRadius ]) >= distCut:
+            
             iPot['ConstrainFlag'] *= 10**len(MeanSensitivity[ InRadius ])   
-
+            if iPot['ConstrainFlag'] > 0:
+                iPotSensitivity  = \
+                  np.append( iPotSensitivity,  \
+                                 np.max(MeanSensitivity[ InRadius ]))
     SecondCutConstrain = \
       len( potentials[ potentials['ConstrainFlag'] >= 10 ])
     
     if SecondCutConstrain > nConstrain:
-        print('WARNING: Number to be constrained is large')
- 
+        #Find the distcut that would remove all but nConstrain gals
+        
+        NewDistCut = np.sort(iPotSensitivity)[::-1][nConstrain]
+        NewNConstrain = len(iPotSensitivity[iPotSensitivity>=NewDistCut])
+
+        print('WARNING: Number to be constrained is large, using new DistCut of %f and new nConstrain %i' % (NewDistCut,NewNConstrain))
+        potentials = \
+          ImageWithinRadius( SensitivityDict, OldPotentials, \
+                                 NewNConstrain, nCutRadii=nCutRadii, distCut=NewDistCut)
 
     return potentials
 

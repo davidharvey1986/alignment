@@ -61,9 +61,13 @@ def VerifyParFile( cluster, constrain='ellipticite'):
 
     #this creates a list of images that the par file will produce
     #in the zeroth order.
-    
+
+
+    lt.source_to_wcs(  lenstoolDir+'/image.all', \
+                            lenstoolDir+'/image_wcs.all')
+                        
     cleanImageList( baseDir+'/'+image['multfile']['filename'],\
-                         lenstoolDir+'/image.dat',
+                         lenstoolDir+'/image_wcs.all',
                         lenstoolDir+'/verify_images.dat')
     
     imageDifferences = \

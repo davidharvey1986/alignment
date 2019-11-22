@@ -24,11 +24,14 @@ def TestSelectedLenses( cluster, potentials, constrain, \
     keys = potentials[1].data.dtype.names
 
     for iRecPot in haloPotentials:
+
+
         iPot = rec2pot( iRecPot, keys )
+        
         if (iRecPot['ConstrainFlag'] >= 10)  & \
           (iRecPot['GalaxyFlag'] == 1):
-            baryons, darkMatter = \
-              split_potential( iPot )
+            
+            baryons, darkMatter =  split_potential( iPot )
               
             TestPots.append( darkMatter )
             TestPots.append( baryons )

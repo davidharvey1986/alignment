@@ -5,7 +5,6 @@ sky2xy.par
 xy2sky.fits
 xy2sky.par
 xy2sky.results
-*.pyc
 CompareImageLists.pyc
 ConstructParFile.pyc
 CreateNewClusterModel.pyc

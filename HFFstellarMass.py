@@ -67,7 +67,7 @@ def HFFstellarMass( cluster ):
     #3. Match the catalogues to get the dark matter properties of the
     #   galaxies
     if not os.path.isfile(DMcatFits):
-        matchCat( membersCatFits, bestParFits, DMcatFits)
+        combineMembersAndBest( membersCatFits, bestParFits, DMcatFits)
 
     #4. The astrodeep catalaogue does not have ra and dec in the
     #   mass file so add it
@@ -138,11 +138,6 @@ def matchCat( catA, catB, outCat):
 
     GalID = np.arange(len(catBData[1].data['RA']))
     
-    catBData[1].data = append_rec(catBData[1].data, 'ID', GalID, \
-                          usemask=False, asrecarray=True)
-
-    
-
     catBData.writeto(catB, clobber=True)
     
     combinedCat = at.run_match(catA, catB)[1].data
@@ -164,9 +159,6 @@ def matchCat( catA, catB, outCat):
     combinedCat = fits.BinTableHDU.from_columns(combinedCat.columns + fits.ColDefs(NewCols)).data
     
     #Add back in the objects that missed out, i.e. non-galaxies
-
- 
-
     columns = []
     
     for iField in combinedCat.dtype.names:
@@ -193,7 +185,7 @@ def matchCat( catA, catB, outCat):
                 continue                
             array = np.zeros(len(GalID)) - 1
             
-            array[combinedCat['ID_2']] = combinedCat[iField]
+            array[combinedCat['ID_2'].astype(int)] = combinedCat[iField]
             iColumn = fits.Column( name =iField, array=array,\
                                        format=iFormat)
 
@@ -202,7 +194,7 @@ def matchCat( catA, catB, outCat):
         
     TotalCat = fits.BinTableHDU.from_columns(columns)
     TotalCat = [fits.PrimaryHDU(), TotalCat]
-
+    
     #append extra potentials in teh best.fits for
     #example external shear
     catBExtensions = fits.open( catB)
@@ -212,7 +204,7 @@ def matchCat( catA, catB, outCat):
             TotalCat.append(catBExtensions[iExt+2])
 
     thdulist = fits.HDUList(TotalCat)
-
+    
     thdulist.writeto(  outCat,  clobber=True )
 
     
@@ -259,3 +251,72 @@ def clusterMembersToFits( membersCat, outFits ):
 
     fits.writeto( outFits, clusterMembers, clobber=True )
     
+
+def combineMembersAndBest( catAFileName, catBFileName, outCat):
+    
+    catA = fits.open(catAFileName)[1].data
+    catB = fits.open(catBFileName)[1].data
+    GalID = np.arange(len(catB['RA']))
+    nNonGalaxies = len(catB) - len(catA)
+    galaxyIDs = GalID[ nNonGalaxies:]
+
+    GalaxyFlagArray = np.zeros(len(GalID)) - 1
+    GalaxyFlagArray[galaxyIDs] = 1
+    GalaxyFlag = []
+    GalaxyFlag.append(fits.Column(name='GalaxyFlag', \
+                                array=GalaxyFlagArray, \
+                                       format='D'))
+            
+                                 
+    catB = fits.BinTableHDU.from_columns(catB.columns + fits.ColDefs(GalaxyFlag)).data
+
+    
+    
+    catB = append_rec(catB, 'ID', GalID, \
+                          usemask=False, asrecarray=True)
+    columns = []
+    
+    for iField in catB.dtype.names:
+        if iField == 'identity':
+            iFormat='A20'
+        else:
+            iFormat=np.dtype(float)
+                           
+        iColumn = fits.Column( name =iField, array=catB[iField],\
+                                       format=iFormat)
+                                  
+        columns.append(iColumn)
+        print iField
+        
+    for iField in catA.dtype.names:
+        if iField == 'ID':
+            continue
+        if iField == 'identity':
+            iFormat='A20'
+        else:
+            iFormat=np.dtype(float)
+               
+
+        array = np.zeros(len(GalID)) - 1
+        array[galaxyIDs] = catA[iField]
+        iColumn = fits.Column( name =iField, array=array,\
+                                       format=iFormat)
+                                  
+        columns.append(iColumn)
+
+        
+    
+    TotalCat = fits.BinTableHDU.from_columns(columns)
+    TotalCat = [fits.PrimaryHDU(), TotalCat]
+
+    #append extra potentials in teh best.fits for
+    #example external shear
+    catBExtensions = fits.open( catBFileName)
+    if len(catBExtensions) >2:
+        
+        for iExt in xrange(len(catBExtensions)-2):
+            TotalCat.append(catBExtensions[iExt+2])
+
+    thdulist = fits.HDUList(TotalCat)
+    
+    thdulist.writeto(  outCat,  clobber=True )
